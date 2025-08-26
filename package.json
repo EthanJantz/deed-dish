@@ -15,7 +15,7 @@
     "pmtiles": "^4.3.0"
   },
   "scripts": {
-    "build": "bun build index.ts --outdir ./dist --target browser",
+    "build": "bun build index.html --outdir ./dist --target browser",
     "serve": "bun --serve --port 23000 .",
     "dev": "bun run build && bun run serve"
   }
