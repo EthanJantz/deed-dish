@@ -1,0 +1,22 @@
+{
+  "name": "frontend",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest",
+    "serve-static": "^2.2.0"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "maplibre-gl": "^5.7.0",
+    "pmtiles": "^4.3.0"
+  },
+  "scripts": {
+    "build": "bun build index.ts --outdir ./dist --target browser",
+    "serve": "bun --serve --port 23000 .",
+    "dev": "bun run build && bun run serve"
+  }
+}
