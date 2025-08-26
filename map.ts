@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     var map = new maplibregl.Map({
         container: 'map',
         style: 'https://tiles.openfreemap.org/styles/positron',
-        center: [-87.693, 41.916], // Chicago area based on bounds
+        center: [-87.693, 41.916],
         zoom: 12
     });
 
