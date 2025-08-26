@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         map.addSource('parcels', {
             type: 'vector',
-            url: 'pmtiles://http://localhost:23000/data/nbd_parcels.pmtiles'
+            url: 'pmtiles://https://pub-cc2d6076b2c24c8b890a71ee6903ed40.r2.dev/nbd_parcels.pmtiles'
         });
         
         // Add the layer with the correct source-layer name
