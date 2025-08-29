@@ -1,6 +1,6 @@
 import index from "./index.html"
 
-Bun.serve({
+const server = Bun.serve({
   port: 23000,
   routes: {
     "/": index
@@ -10,4 +10,6 @@ Bun.serve({
     console: true,
   }
 });
+
+console.log(`Server running at http://localhost:${server.port}`);
 
