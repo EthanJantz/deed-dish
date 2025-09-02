@@ -5,7 +5,8 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
-    "serve-static": "^2.2.0"
+    "serve-static": "^2.2.0",
+    "wrangler": "^4.33.1"
   },
   "peerDependencies": {
     "typescript": "^5"
