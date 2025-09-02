@@ -12,6 +12,12 @@ const R2_BASE_URL = 'https://pub-cc2d6076b2c24c8b890a71ee6903ed40.r2.dev/';
 let clickTimeout: number | null = null;
 let currentHighlightedPins: string[] = [];
 
+// UI element references
+let parcelDetailsElement: HTMLElement;
+let loadingIndicatorElement: HTMLElement;
+let relationCountElement: HTMLElement;
+let errorMessageElement: HTMLElement;
+
 async function loadPinRelations(pin: string): Promise<string[]> {
     // Check cache first
     if (pinRelationsCache.has(pin)) {
@@ -70,6 +76,12 @@ async function loadPinRelations(pin: string): Promise<string[]> {
 
 // Wait for DOM to be ready
 document.addEventListener('DOMContentLoaded', () => {
+    // Get UI element references
+    parcelDetailsElement = document.getElementById('parcel-details')!;
+    loadingIndicatorElement = document.getElementById('loading-indicator')!;
+    relationCountElement = document.getElementById('relation-count')!;
+    errorMessageElement = document.getElementById('error-message')!;
+    
     // Register the PMTiles protocol
     let protocol = new Protocol();
     maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -137,6 +149,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     currentHighlightedPins = [];
                     console.log('Cleared highlights');
                 }
+                // Reset UI
+                parcelDetailsElement.textContent = 'Click on a parcel to see related properties';
+                relationCountElement.textContent = '';
+                errorMessageElement.style.display = 'none';
                 return;
             }
             
@@ -155,6 +171,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
+            // Update UI with parcel info and show loading
+            parcelDetailsElement.textContent = `Selected parcel: ${pin}`;
+            loadingIndicatorElement.style.display = 'block';
+            relationCountElement.textContent = '';
+            errorMessageElement.style.display = 'none';
+            
             // Show loading feedback
             console.log(`Loading relations for PIN: ${pin}...`);
             map.getCanvas().style.cursor = 'wait';
@@ -163,23 +185,71 @@ document.addEventListener('DOMContentLoaded', () => {
                 const relations = await loadPinRelations(pin);
                 console.log(`Found ${relations.length} related parcels for PIN ${pin}`);
                 
-                // Optimize for large relation sets - limit to reasonable number
-                const maxHighlights = 1000; // Prevent performance issues
-                const pinsToHighlight = relations.slice(0, maxHighlights);
+                // Filter relations to only include parcels that exist in the tilemap
+                const existingParcels = map.querySourceFeatures('parcels', {
+                    sourceLayer: 'parcels',
+                    filter: ['in', 'name', ...relations]
+                });
                 
-                if (relations.length > maxHighlights) {
-                    console.warn(`PIN ${pin} has ${relations.length} relations, showing first ${maxHighlights}`);
+                const existingPins = existingParcels.map(feature => feature.properties?.name).filter(Boolean);
+                const uniqueExistingPins = [...new Set(existingPins)]; // Remove duplicates
+                
+                // Optimize for large relation sets - limit to reasonable number
+                const maxHighlights = 1000;
+                const pinsToHighlight = uniqueExistingPins.slice(0, maxHighlights);
+                
+                console.log(`PIN ${pin} has ${relations.length} total relations, ${uniqueExistingPins.length} exist in tilemap`);
+                
+                if (uniqueExistingPins.length > maxHighlights) {
+                    console.warn(`Showing first ${maxHighlights} of ${uniqueExistingPins.length} existing relations`);
                 }
                 
                 // Update highlights efficiently
                 if (pinsToHighlight.length > 0) {
                     map.setFilter('parcels-highlight', ['in', 'name', ...pinsToHighlight]);
                     currentHighlightedPins = pinsToHighlight;
-                    console.log(`Highlighted ${pinsToHighlight.length} related parcels`);
+                    console.log(`Highlighted ${pinsToHighlight.length} related parcels (${uniqueExistingPins.length} available in tilemap)`);
+                    
+                    // Calculate bounding box of highlighted parcels for zoom-to-fit
+                    const bounds = new maplibregl.LngLatBounds();
+                    existingParcels.forEach(parcel => {
+                        if (parcel.geometry && parcel.geometry.type === 'Polygon') {
+                            // Add all coordinates of the polygon to the bounds
+                            parcel.geometry.coordinates[0].forEach((coord: number[]) => {
+                                bounds.extend(coord);
+                            });
+                        } else if (parcel.geometry && parcel.geometry.type === 'MultiPolygon') {
+                            // Handle MultiPolygon geometries
+                            parcel.geometry.coordinates.forEach((polygon: number[][][]) => {
+                                polygon[0].forEach((coord: number[]) => {
+                                    bounds.extend(coord);
+                                });
+                            });
+                        }
+                    });
+                    
+                    // Zoom to fit all highlighted parcels with some padding
+                    if (!bounds.isEmpty()) {
+                        map.fitBounds(bounds, {
+                            padding: { top: 50, bottom: 50, left: 50, right: 50 },
+                            maxZoom: 16 // Don't zoom in too close
+                        });
+                        console.log('Zoomed to fit highlighted parcels');
+                    }
+                    
+                    // Update UI with success info
+                    relationCountElement.textContent = `Found ${relations.length} total related parcels, ${uniqueExistingPins.length} visible on map (${pinsToHighlight.length} highlighted)`;
                 } else {
                     map.setFilter('parcels-highlight', ['in', 'name', '']);
                     currentHighlightedPins = [];
-                    console.log('No related parcels to highlight');
+                    console.log('No related parcels found in tilemap to highlight');
+                    
+                    // Update UI for no relations case
+                    if (relations.length > 0) {
+                        relationCountElement.textContent = `Found ${relations.length} related parcels, but none are visible on the current map`;
+                    } else {
+                        relationCountElement.textContent = 'No related parcels found for this parcel';
+                    }
                 }
                 
             } catch (error) {
@@ -187,8 +257,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Clear highlights on error
                 map.setFilter('parcels-highlight', ['in', 'name', '']);
                 currentHighlightedPins = [];
+                
+                // Show error in UI
+                errorMessageElement.textContent = `Error loading relations for parcel ${pin}`;
+                errorMessageElement.style.display = 'block';
+                relationCountElement.textContent = '';
             } finally {
-                // Reset cursor
+                // Reset loading state
+                loadingIndicatorElement.style.display = 'none';
                 map.getCanvas().style.cursor = '';
                 clickTimeout = null;
             }

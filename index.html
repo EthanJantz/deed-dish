@@ -5,6 +5,19 @@
 </head>
 <body>
     <div id="map" style="width: 100%; height: 80vh;"></div>
+    <div id="info-panel" style="width: 100%; height: 20vh; background: #f5f5f5; border-top: 1px solid #ddd; padding: 20px; box-sizing: border-box;">
+        <div id="parcel-info" style="margin-bottom: 15px;">
+            <h3 style="margin: 0 0 10px 0; color: #333;">Parcel Information</h3>
+            <div id="parcel-details" style="color: #666;">Click on a parcel to see related properties</div>
+        </div>
+        <div id="status-info">
+            <div id="loading-indicator" style="display: none; color: #2196F3;">
+                <span>Loading related parcels...</span>
+            </div>
+            <div id="relation-count" style="color: #333;"></div>
+            <div id="error-message" style="display: none; color: #f44336;"></div>
+        </div>
+    </div>
     <script type="module" src="./map.ts"></script>
 </body>
 </html>
