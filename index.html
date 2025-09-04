@@ -10,6 +10,21 @@
             <h3 style="margin: 0 0 10px 0; color: #333;">Parcel Information</h3>
             <div id="parcel-details" style="color: #666;">Click on a parcel to see related properties</div>
         </div>
+        <div id="relationship-controls" style="margin-bottom: 15px;">
+            <h4 style="margin: 0 0 8px 0; color: #333; font-size: 14px;">Relationship Types:</h4>
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <label style="display: flex; align-items: center; font-size: 13px; color: #555;">
+                    <input type="checkbox" id="legal-description-toggle" checked style="margin-right: 5px;">
+                    <span style="color: #2196F3;">Legal Description</span>
+                    <span id="legal-description-count" style="margin-left: 5px; color: #666;">(0)</span>
+                </label>
+                <label style="display: flex; align-items: center; font-size: 13px; color: #555;">
+                    <input type="checkbox" id="shared-grantee-toggle" checked style="margin-right: 5px;">
+                    <span style="color: #ff6b35;">Shared Grantee</span>
+                    <span id="shared-grantee-count" style="margin-left: 5px; color: #666;">(0)</span>
+                </label>
+            </div>
+        </div>
         <div id="status-info">
             <div id="loading-indicator" style="display: none; color: #2196F3;">
                 <span>Loading related parcels...</span>

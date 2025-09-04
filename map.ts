@@ -4,13 +4,27 @@ import { Protocol } from 'pmtiles';
 console.log("Map module loaded!");
 
 // PIN Relations cache and loading system
-const pinRelationsCache = new Map<string, string[]>();
+interface RelationshipData {
+    legal_description?: string[];
+    shared_grantee?: string[];
+}
+
+const pinRelationsCache = new Map<string, RelationshipData>();
 const loadingPins = new Set<string>();
 const R2_BASE_URL = 'https://pub-cc2d6076b2c24c8b890a71ee6903ed40.r2.dev/';
 
 // Performance optimization variables
 let clickTimeout: number | null = null;
-let currentHighlightedPins: string[] = [];
+let currentHighlightedPins = {
+    legal_description: [] as string[],
+    shared_grantee: [] as string[]
+};
+
+// UI element references for relationship controls
+let legalDescToggle: HTMLInputElement;
+let sharedGranteeToggle: HTMLInputElement;
+let legalDescCount: HTMLElement;
+let sharedGranteeCount: HTMLElement;
 
 // UI element references
 let parcelDetailsElement: HTMLElement;
@@ -18,7 +32,7 @@ let loadingIndicatorElement: HTMLElement;
 let relationCountElement: HTMLElement;
 let errorMessageElement: HTMLElement;
 
-async function loadPinRelations(pin: string): Promise<string[]> {
+async function loadPinRelations(pin: string): Promise<RelationshipData> {
     // Check cache first
     if (pinRelationsCache.has(pin)) {
         return pinRelationsCache.get(pin)!;
@@ -48,7 +62,7 @@ async function loadPinRelations(pin: string): Promise<string[]> {
         if (!response.ok) {
             if (response.status === 404) {
                 // No relations file for this PIN
-                const emptyRelations: string[] = [];
+                const emptyRelations: RelationshipData = {};
                 pinRelationsCache.set(pin, emptyRelations);
                 return emptyRelations;
             }
@@ -56,7 +70,7 @@ async function loadPinRelations(pin: string): Promise<string[]> {
         }
         
         const data = await response.json();
-        const relations = data[pin] || [];
+        const relations = data[pin] || {};
         
         // Cache the result
         pinRelationsCache.set(pin, relations);
@@ -65,7 +79,7 @@ async function loadPinRelations(pin: string): Promise<string[]> {
     } catch (error) {
         console.error(`Error loading PIN relations for ${pin}:`, error);
         // Cache empty result to avoid repeated failures
-        const emptyRelations: string[] = [];
+        const emptyRelations: RelationshipData = {};
         pinRelationsCache.set(pin, emptyRelations);
         return emptyRelations;
         
@@ -81,6 +95,12 @@ document.addEventListener('DOMContentLoaded', () => {
     loadingIndicatorElement = document.getElementById('loading-indicator')!;
     relationCountElement = document.getElementById('relation-count')!;
     errorMessageElement = document.getElementById('error-message')!;
+    
+    // Get relationship control references
+    legalDescToggle = document.getElementById('legal-description-toggle') as HTMLInputElement;
+    sharedGranteeToggle = document.getElementById('shared-grantee-toggle') as HTMLInputElement;
+    legalDescCount = document.getElementById('legal-description-count')!;
+    sharedGranteeCount = document.getElementById('shared-grantee-count')!;
     
     // Register the PMTiles protocol
     let protocol = new Protocol();
@@ -113,9 +133,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Add highlight layer for related parcels
+        // Add highlight layers for different relationship types
         map.addLayer({
-            'id': 'parcels-highlight',
+            'id': 'parcels-highlight-legal-description',
+            'type': 'fill',
+            'source': 'parcels',
+            'source-layer': 'parcels',
+            'paint': {
+                'fill-color': '#2196F3',
+                'fill-opacity': 0.7
+            },
+            'filter': ['in', 'name', ''] // Initially hide all parcels
+        });
+        
+        map.addLayer({
+            'id': 'parcels-highlight-shared-grantee',
             'type': 'fill',
             'source': 'parcels',
             'source-layer': 'parcels',
@@ -128,6 +160,28 @@ document.addEventListener('DOMContentLoaded', () => {
         
         console.log("Added parcels layer - you should see data now!");
     });
+
+    // Function to update highlights based on checkbox states
+    function updateHighlights() {
+        const showLegalDesc = legalDescToggle.checked;
+        const showSharedGrantee = sharedGranteeToggle.checked;
+        
+        if (showLegalDesc && currentHighlightedPins.legal_description.length > 0) {
+            map.setFilter('parcels-highlight-legal-description', ['in', 'name', ...currentHighlightedPins.legal_description]);
+        } else {
+            map.setFilter('parcels-highlight-legal-description', ['in', 'name', '']);
+        }
+        
+        if (showSharedGrantee && currentHighlightedPins.shared_grantee.length > 0) {
+            map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', ...currentHighlightedPins.shared_grantee]);
+        } else {
+            map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', '']);
+        }
+    }
+
+    // Add event listeners for checkboxes
+    legalDescToggle.addEventListener('change', updateHighlights);
+    sharedGranteeToggle.addEventListener('change', updateHighlights);
 
     // Enhanced click handler for PIN relations with performance optimizations
     map.on('click', async (e) => {
@@ -144,14 +198,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (features.length === 0) {
                 console.log("No parcel clicked");
                 // Clear highlights when clicking empty area
-                if (currentHighlightedPins.length > 0) {
-                    map.setFilter('parcels-highlight', ['in', 'name', '']);
-                    currentHighlightedPins = [];
+                if (currentHighlightedPins.legal_description.length > 0 || currentHighlightedPins.shared_grantee.length > 0) {
+                    map.setFilter('parcels-highlight-legal-description', ['in', 'name', '']);
+                    map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', '']);
+                    currentHighlightedPins = { legal_description: [], shared_grantee: [] };
                     console.log('Cleared highlights');
                 }
                 // Reset UI
                 parcelDetailsElement.textContent = 'Click on a parcel to see related properties';
                 relationCountElement.textContent = '';
+                legalDescCount.textContent = '(0)';
+                sharedGranteeCount.textContent = '(0)';
                 errorMessageElement.style.display = 'none';
                 return;
             }
@@ -166,7 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Skip if we're already highlighting this PIN's relations
-            if (currentHighlightedPins.includes(pin)) {
+            if (currentHighlightedPins.legal_description.includes(pin) || currentHighlightedPins.shared_grantee.includes(pin)) {
                 console.log(`PIN ${pin} relations already highlighted`);
                 return;
             }
@@ -183,36 +240,56 @@ document.addEventListener('DOMContentLoaded', () => {
             
             try {
                 const relations = await loadPinRelations(pin);
-                console.log(`Found ${relations.length} related parcels for PIN ${pin}`);
+                const legalDescRelations = relations.legal_description || [];
+                const sharedGranteeRelations = relations.shared_grantee || [];
                 
-                // Filter relations to only include parcels that exist in the tilemap
-                const existingParcels = map.querySourceFeatures('parcels', {
-                    sourceLayer: 'parcels',
-                    filter: ['in', 'name', ...relations]
-                });
+                console.log(`Found ${legalDescRelations.length} legal description relations and ${sharedGranteeRelations.length} shared grantee relations for PIN ${pin}`);
                 
-                const existingPins = existingParcels.map(feature => feature.properties?.name).filter(Boolean);
-                const uniqueExistingPins = [...new Set(existingPins)]; // Remove duplicates
+                // Process legal description relations
+                const legalDescParcels = legalDescRelations.length > 0 ? 
+                    map.querySourceFeatures('parcels', {
+                        sourceLayer: 'parcels',
+                        filter: ['in', 'name', ...legalDescRelations]
+                    }) : [];
+                
+                const legalDescPins = legalDescParcels.map(feature => feature.properties?.name).filter(Boolean);
+                const uniqueLegalDescPins = [...new Set(legalDescPins)]; // Remove duplicates
+                
+                // Process shared grantee relations
+                const sharedGranteeParcels = sharedGranteeRelations.length > 0 ? 
+                    map.querySourceFeatures('parcels', {
+                        sourceLayer: 'parcels',
+                        filter: ['in', 'name', ...sharedGranteeRelations]
+                    }) : [];
+                
+                const sharedGranteePins = sharedGranteeParcels.map(feature => feature.properties?.name).filter(Boolean);
+                const uniqueSharedGranteePins = [...new Set(sharedGranteePins)]; // Remove duplicates
                 
                 // Optimize for large relation sets - limit to reasonable number
                 const maxHighlights = 1000;
-                const pinsToHighlight = uniqueExistingPins.slice(0, maxHighlights);
+                const legalDescToHighlight = uniqueLegalDescPins.slice(0, maxHighlights);
+                const sharedGranteeToHighlight = uniqueSharedGranteePins.slice(0, maxHighlights);
                 
-                console.log(`PIN ${pin} has ${relations.length} total relations, ${uniqueExistingPins.length} exist in tilemap`);
+                console.log(`PIN ${pin} - Legal Description: ${legalDescRelations.length} total, ${uniqueLegalDescPins.length} in tilemap`);
+                console.log(`PIN ${pin} - Shared Grantee: ${sharedGranteeRelations.length} total, ${uniqueSharedGranteePins.length} in tilemap`);
                 
-                if (uniqueExistingPins.length > maxHighlights) {
-                    console.warn(`Showing first ${maxHighlights} of ${uniqueExistingPins.length} existing relations`);
-                }
+                // Update current highlighted pins
+                currentHighlightedPins.legal_description = legalDescToHighlight;
+                currentHighlightedPins.shared_grantee = sharedGranteeToHighlight;
                 
-                // Update highlights efficiently
-                if (pinsToHighlight.length > 0) {
-                    map.setFilter('parcels-highlight', ['in', 'name', ...pinsToHighlight]);
-                    currentHighlightedPins = pinsToHighlight;
-                    console.log(`Highlighted ${pinsToHighlight.length} related parcels (${uniqueExistingPins.length} available in tilemap)`);
-                    
-                    // Calculate bounding box of highlighted parcels for zoom-to-fit
+                // Update UI counts
+                legalDescCount.textContent = `(${legalDescRelations.length})`;
+                sharedGranteeCount.textContent = `(${sharedGranteeRelations.length})`;
+                
+                // Apply highlights based on checkbox states
+                updateHighlights();
+                
+                // Calculate bounding box for zoom-to-fit (include all relation types)
+                const allParcels = [...legalDescParcels, ...sharedGranteeParcels];
+                
+                if (allParcels.length > 0) {
                     const bounds = new maplibregl.LngLatBounds();
-                    existingParcels.forEach(parcel => {
+                    allParcels.forEach(parcel => {
                         if (parcel.geometry && parcel.geometry.type === 'Polygon') {
                             // Add all coordinates of the polygon to the bounds
                             parcel.geometry.coordinates[0].forEach((coord: number[]) => {
@@ -238,15 +315,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     
                     // Update UI with success info
-                    relationCountElement.textContent = `Found ${relations.length} total related parcels, ${uniqueExistingPins.length} visible on map (${pinsToHighlight.length} highlighted)`;
+                    const totalRelations = legalDescRelations.length + sharedGranteeRelations.length;
+                    const totalVisible = uniqueLegalDescPins.length + uniqueSharedGranteePins.length;
+                    relationCountElement.textContent = `Found ${totalRelations} total related parcels, ${totalVisible} visible on map`;
                 } else {
-                    map.setFilter('parcels-highlight', ['in', 'name', '']);
-                    currentHighlightedPins = [];
                     console.log('No related parcels found in tilemap to highlight');
                     
                     // Update UI for no relations case
-                    if (relations.length > 0) {
-                        relationCountElement.textContent = `Found ${relations.length} related parcels, but none are visible on the current map`;
+                    const totalRelations = legalDescRelations.length + sharedGranteeRelations.length;
+                    if (totalRelations > 0) {
+                        relationCountElement.textContent = `Found ${totalRelations} related parcels, but none are visible on the current map`;
                     } else {
                         relationCountElement.textContent = 'No related parcels found for this parcel';
                     }
@@ -255,13 +333,16 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 console.error("Failed to load PIN relations:", error);
                 // Clear highlights on error
-                map.setFilter('parcels-highlight', ['in', 'name', '']);
-                currentHighlightedPins = [];
+                map.setFilter('parcels-highlight-legal-description', ['in', 'name', '']);
+                map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', '']);
+                currentHighlightedPins = { legal_description: [], shared_grantee: [] };
                 
                 // Show error in UI
                 errorMessageElement.textContent = `Error loading relations for parcel ${pin}`;
                 errorMessageElement.style.display = 'block';
                 relationCountElement.textContent = '';
+                legalDescCount.textContent = '(0)';
+                sharedGranteeCount.textContent = '(0)';
             } finally {
                 // Reset loading state
                 loadingIndicatorElement.style.display = 'none';
