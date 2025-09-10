@@ -4,33 +4,22 @@
     <link href="https://unpkg.com/maplibre-gl@latest/dist/maplibre-gl.css" rel="stylesheet" />
 </head>
 <body>
-    <div id="map" style="width: 100%; height: 80vh;"></div>
-    <div id="info-panel" style="width: 100%; height: 20vh; background: #f5f5f5; border-top: 1px solid #ddd; padding: 20px; box-sizing: border-box;">
+    <div style="display: flex; height: 100vh;">
+        <div id="map" style="flex: 1; height: 100%;"></div>
+        <div id="info-panel" style="width: 350px; height: 100%; background: #f5f5f5; border-left: 1px solid #ddd; padding: 20px; box-sizing: border-box; overflow-y: auto;">
         <div id="parcel-info" style="margin-bottom: 15px;">
             <h3 style="margin: 0 0 10px 0; color: #333;">Parcel Information</h3>
-            <div id="parcel-details" style="color: #666;">Click on a parcel to see related properties</div>
+            <div id="parcel-details" style="color: #666;">Click on a parcel to see property documents</div>
         </div>
-        <div id="relationship-controls" style="margin-bottom: 15px;">
-            <h4 style="margin: 0 0 8px 0; color: #333; font-size: 14px;">Relationship Types:</h4>
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <label style="display: flex; align-items: center; font-size: 13px; color: #555;">
-                    <input type="checkbox" id="legal-description-toggle" checked style="margin-right: 5px;">
-                    <span style="color: #2196F3;">Legal Description</span>
-                    <span id="legal-description-count" style="margin-left: 5px; color: #666;">(0)</span>
-                </label>
-                <label style="display: flex; align-items: center; font-size: 13px; color: #555;">
-                    <input type="checkbox" id="shared-grantee-toggle" checked style="margin-right: 5px;">
-                    <span style="color: #ff6b35;">Shared Grantee</span>
-                    <span id="shared-grantee-count" style="margin-left: 5px; color: #666;">(0)</span>
-                </label>
-            </div>
+        <div id="document-list" style="margin-bottom: 15px;">
+            <!-- Documents will be populated here -->
         </div>
         <div id="status-info">
             <div id="loading-indicator" style="display: none; color: #2196F3;">
-                <span>Loading related parcels...</span>
+                <span>Loading documents...</span>
             </div>
-            <div id="relation-count" style="color: #333;"></div>
             <div id="error-message" style="display: none; color: #f44336;"></div>
+        </div>
         </div>
     </div>
     <script type="module" src="./map.ts"></script>

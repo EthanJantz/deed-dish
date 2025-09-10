@@ -3,39 +3,36 @@ import { Protocol } from 'pmtiles';
 
 console.log("Map module loaded!");
 
-// PIN Relations cache and loading system
-interface RelationshipData {
-    legal_description?: string[];
-    shared_grantee?: string[];
+// PIN Document cache and loading system
+interface Document {
+    DOC_NUM: string;
+    DOC_TYPE: string;
+    DATE_EXECUTED: string;
+    DATE_RECORDED: string;
+    DOC_URL: string;
+    CONSIDERATION_AMOUNT: string | null;
+    GRANTEES: string[];
 }
 
-const pinRelationsCache = new Map<string, RelationshipData>();
+interface PinDocumentData {
+    ADDRESSES: string[];
+    DOCS: Document[];
+}
+
+const pinDocumentsCache = new Map<string, PinDocumentData>();
 const loadingPins = new Set<string>();
-const R2_BASE_URL = 'https://pub-cc2d6076b2c24c8b890a71ee6903ed40.r2.dev/';
-
-// Performance optimization variables
-let clickTimeout: number | null = null;
-let currentHighlightedPins = {
-    legal_description: [] as string[],
-    shared_grantee: [] as string[]
-};
-
-// UI element references for relationship controls
-let legalDescToggle: HTMLInputElement;
-let sharedGranteeToggle: HTMLInputElement;
-let legalDescCount: HTMLElement;
-let sharedGranteeCount: HTMLElement;
+const PIN_API_PATH = '/data/pin/';
 
 // UI element references
 let parcelDetailsElement: HTMLElement;
 let loadingIndicatorElement: HTMLElement;
-let relationCountElement: HTMLElement;
 let errorMessageElement: HTMLElement;
+let documentListElement: HTMLElement;
 
-async function loadPinRelations(pin: string): Promise<RelationshipData> {
+async function loadPinDocuments(pin: string): Promise<PinDocumentData> {
     // Check cache first
-    if (pinRelationsCache.has(pin)) {
-        return pinRelationsCache.get(pin)!;
+    if (pinDocumentsCache.has(pin)) {
+        return pinDocumentsCache.get(pin)!;
     }
     
     // Check if already loading
@@ -43,13 +40,13 @@ async function loadPinRelations(pin: string): Promise<RelationshipData> {
         // Wait for existing load to complete
         return new Promise((resolve, reject) => {
             const checkInterval = setInterval(() => {
-                if (pinRelationsCache.has(pin)) {
+                if (pinDocumentsCache.has(pin)) {
                     clearInterval(checkInterval);
-                    resolve(pinRelationsCache.get(pin)!);
+                    resolve(pinDocumentsCache.get(pin)!);
                 } else if (!loadingPins.has(pin)) {
                     // Loading failed
                     clearInterval(checkInterval);
-                    reject(new Error(`Failed to load relations for PIN ${pin}`));
+                    reject(new Error(`Failed to load documents for PIN ${pin}`));
                 }
             }, 100);
         });
@@ -58,34 +55,84 @@ async function loadPinRelations(pin: string): Promise<RelationshipData> {
     loadingPins.add(pin);
     
     try {
-        const response = await fetch(`${R2_BASE_URL}${pin}.json`);
+        const response = await fetch(`${PIN_API_PATH}${pin}.json`);
         if (!response.ok) {
             if (response.status === 404) {
-                // No relations file for this PIN
-                const emptyRelations: RelationshipData = {};
-                pinRelationsCache.set(pin, emptyRelations);
-                return emptyRelations;
+                // No document file for this PIN
+                const emptyData: PinDocumentData = { ADDRESSES: [], DOCS: [] };
+                pinDocumentsCache.set(pin, emptyData);
+                return emptyData;
             }
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const data = await response.json();
-        const relations = data[pin] || {};
+        const data = await response.json() as PinDocumentData;
         
         // Cache the result
-        pinRelationsCache.set(pin, relations);
-        return relations;
+        pinDocumentsCache.set(pin, data);
+        return data;
         
     } catch (error) {
-        console.error(`Error loading PIN relations for ${pin}:`, error);
+        console.error(`Error loading PIN documents for ${pin}:`, error);
         // Cache empty result to avoid repeated failures
-        const emptyRelations: RelationshipData = {};
-        pinRelationsCache.set(pin, emptyRelations);
-        return emptyRelations;
+        const emptyData: PinDocumentData = { ADDRESSES: [], DOCS: [] };
+        pinDocumentsCache.set(pin, emptyData);
+        return emptyData;
         
     } finally {
         loadingPins.delete(pin);
     }
+}
+
+// Function to render documents in the info panel
+function renderDocuments(pin: string, addresses: string[], documents: Document[]) {
+    // Update parcel details
+    if (addresses.length > 0) {
+        parcelDetailsElement.innerHTML = `<strong>PIN:</strong> ${pin}<br><strong>Address:</strong> ${addresses.join(', ')}`;
+    } else {
+        parcelDetailsElement.innerHTML = `<strong>PIN:</strong> ${pin}<br><em>No address information available</em>`;
+    }
+    
+    // Clear document list
+    documentListElement.innerHTML = '';
+    
+    if (documents.length === 0) {
+        documentListElement.innerHTML = '<p style="color: #666; font-style: italic;">No documents found for this parcel.</p>';
+        return;
+    }
+    
+    // Sort documents by DATE_RECORDED (newest first)
+    const sortedDocs = [...documents].sort((a, b) => {
+        const dateA = new Date(a.DATE_RECORDED).getTime();
+        const dateB = new Date(b.DATE_RECORDED).getTime();
+        return dateB - dateA;
+    });
+    
+    // Create document list HTML
+    const docsHtml = sortedDocs.map(doc => {
+        const formattedDate = new Date(doc.DATE_RECORDED).toLocaleDateString();
+        const consideration = doc.CONSIDERATION_AMOUNT ? ` - ${doc.CONSIDERATION_AMOUNT}` : '';
+        const grantees = doc.GRANTEES.length > 0 ? ` to ${doc.GRANTEES.join(', ')}` : '';
+        
+        return `
+            <div style="margin-bottom: 12px; padding: 10px; border-left: 3px solid #2196F3; background: #f9f9f9;">
+                <div style="margin-bottom: 5px;">
+                    <strong><a href="${doc.DOC_URL}" target="_blank" style="color: #2196F3; text-decoration: none;">
+                        ${doc.DOC_NUM}
+                    </a></strong>
+                    <span style="color: #666; margin-left: 10px;">${formattedDate}</span>
+                </div>
+                <div style="color: #333; font-size: 14px;">
+                    ${doc.DOC_TYPE}${consideration}${grantees}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    documentListElement.innerHTML = `
+        <h4 style="margin: 0 0 10px 0; color: #333;">Documents (${documents.length})</h4>
+        ${docsHtml}
+    `;
 }
 
 // Wait for DOM to be ready
@@ -93,14 +140,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Get UI element references
     parcelDetailsElement = document.getElementById('parcel-details')!;
     loadingIndicatorElement = document.getElementById('loading-indicator')!;
-    relationCountElement = document.getElementById('relation-count')!;
     errorMessageElement = document.getElementById('error-message')!;
-    
-    // Get relationship control references
-    legalDescToggle = document.getElementById('legal-description-toggle') as HTMLInputElement;
-    sharedGranteeToggle = document.getElementById('shared-grantee-toggle') as HTMLInputElement;
-    legalDescCount = document.getElementById('legal-description-count')!;
-    sharedGranteeCount = document.getElementById('shared-grantee-count')!;
+    documentListElement = document.getElementById('document-list')!;
     
     // Register the PMTiles protocol
     let protocol = new Protocol();
@@ -133,222 +174,62 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Add highlight layers for different relationship types
-        map.addLayer({
-            'id': 'parcels-highlight-legal-description',
-            'type': 'fill',
-            'source': 'parcels',
-            'source-layer': 'parcels',
-            'paint': {
-                'fill-color': '#2196F3',
-                'fill-opacity': 0.7
-            },
-            'filter': ['in', 'name', ''] // Initially hide all parcels
-        });
-        
-        map.addLayer({
-            'id': 'parcels-highlight-shared-grantee',
-            'type': 'fill',
-            'source': 'parcels',
-            'source-layer': 'parcels',
-            'paint': {
-                'fill-color': '#ff6b35',
-                'fill-opacity': 0.7
-            },
-            'filter': ['in', 'name', ''] // Initially hide all parcels
-        });
         
         console.log("Added parcels layer - you should see data now!");
     });
 
-    // Function to update highlights based on checkbox states
-    function updateHighlights() {
-        const showLegalDesc = legalDescToggle.checked;
-        const showSharedGrantee = sharedGranteeToggle.checked;
-        
-        if (showLegalDesc && currentHighlightedPins.legal_description.length > 0) {
-            map.setFilter('parcels-highlight-legal-description', ['in', 'name', ...currentHighlightedPins.legal_description]);
-        } else {
-            map.setFilter('parcels-highlight-legal-description', ['in', 'name', '']);
-        }
-        
-        if (showSharedGrantee && currentHighlightedPins.shared_grantee.length > 0) {
-            map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', ...currentHighlightedPins.shared_grantee]);
-        } else {
-            map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', '']);
-        }
-    }
 
-    // Add event listeners for checkboxes
-    legalDescToggle.addEventListener('change', updateHighlights);
-    sharedGranteeToggle.addEventListener('change', updateHighlights);
-
-    // Enhanced click handler for PIN relations with performance optimizations
+    // Click handler for loading PIN documents
     map.on('click', async (e) => {
-        // Debounce rapid clicks
-        if (clickTimeout) {
-            clearTimeout(clickTimeout);
+        const features = map.queryRenderedFeatures(e.point, {
+            layers: ['parcels-layer']
+        });
+        
+        if (features.length === 0) {
+            console.log("No parcel clicked");
+            // Reset UI
+            parcelDetailsElement.textContent = 'Click on a parcel to see property documents';
+            documentListElement.innerHTML = '';
+            errorMessageElement.style.display = 'none';
+            return;
         }
         
-        clickTimeout = setTimeout(async () => {
-            const features = map.queryRenderedFeatures(e.point, {
-                layers: ['parcels-layer']
-            });
+        const parcel = features[0];
+        
+        // Extract PIN from feature properties
+        const pin = parcel.properties?.name;
+        if (!pin) {
+            console.error("No PIN found in parcel properties:", parcel.properties);
+            return;
+        }
+        
+        // Update UI with parcel info and show loading
+        parcelDetailsElement.innerHTML = `<strong>PIN:</strong> ${pin}`;
+        documentListElement.innerHTML = '';
+        loadingIndicatorElement.style.display = 'block';
+        errorMessageElement.style.display = 'none';
+        
+        console.log(`Loading documents for PIN: ${pin}...`);
+        map.getCanvas().style.cursor = 'wait';
+        
+        try {
+            const pinData = await loadPinDocuments(pin);
+            console.log(`Loaded ${pinData.DOCS.length} documents for PIN ${pin}`);
             
-            if (features.length === 0) {
-                console.log("No parcel clicked");
-                // Clear highlights when clicking empty area
-                if (currentHighlightedPins.legal_description.length > 0 || currentHighlightedPins.shared_grantee.length > 0) {
-                    map.setFilter('parcels-highlight-legal-description', ['in', 'name', '']);
-                    map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', '']);
-                    currentHighlightedPins = { legal_description: [], shared_grantee: [] };
-                    console.log('Cleared highlights');
-                }
-                // Reset UI
-                parcelDetailsElement.textContent = 'Click on a parcel to see related properties';
-                relationCountElement.textContent = '';
-                legalDescCount.textContent = '(0)';
-                sharedGranteeCount.textContent = '(0)';
-                errorMessageElement.style.display = 'none';
-                return;
-            }
+            // Render the documents
+            renderDocuments(pin, pinData.ADDRESSES, pinData.DOCS);
             
-            const parcel = features[0];
+        } catch (error) {
+            console.error("Failed to load PIN documents:", error);
             
-            // Extract PIN from feature properties
-            const pin = parcel.properties?.name;
-            if (!pin) {
-                console.error("No PIN found in parcel properties:", parcel.properties);
-                return;
-            }
-            
-            // Skip if we're already highlighting this PIN's relations
-            if (currentHighlightedPins.legal_description.includes(pin) || currentHighlightedPins.shared_grantee.includes(pin)) {
-                console.log(`PIN ${pin} relations already highlighted`);
-                return;
-            }
-            
-            // Update UI with parcel info and show loading
-            parcelDetailsElement.textContent = `Selected parcel: ${pin}`;
-            loadingIndicatorElement.style.display = 'block';
-            relationCountElement.textContent = '';
-            errorMessageElement.style.display = 'none';
-            
-            // Show loading feedback
-            console.log(`Loading relations for PIN: ${pin}...`);
-            map.getCanvas().style.cursor = 'wait';
-            
-            try {
-                const relations = await loadPinRelations(pin);
-                const legalDescRelations = relations.legal_description || [];
-                const sharedGranteeRelations = relations.shared_grantee || [];
-                
-                console.log(`Found ${legalDescRelations.length} legal description relations and ${sharedGranteeRelations.length} shared grantee relations for PIN ${pin}`);
-                
-                // Process legal description relations
-                const legalDescParcels = legalDescRelations.length > 0 ? 
-                    map.querySourceFeatures('parcels', {
-                        sourceLayer: 'parcels',
-                        filter: ['in', 'name', ...legalDescRelations]
-                    }) : [];
-                
-                const legalDescPins = legalDescParcels.map(feature => feature.properties?.name).filter(Boolean);
-                const uniqueLegalDescPins = [...new Set(legalDescPins)]; // Remove duplicates
-                
-                // Process shared grantee relations
-                const sharedGranteeParcels = sharedGranteeRelations.length > 0 ? 
-                    map.querySourceFeatures('parcels', {
-                        sourceLayer: 'parcels',
-                        filter: ['in', 'name', ...sharedGranteeRelations]
-                    }) : [];
-                
-                const sharedGranteePins = sharedGranteeParcels.map(feature => feature.properties?.name).filter(Boolean);
-                const uniqueSharedGranteePins = [...new Set(sharedGranteePins)]; // Remove duplicates
-                
-                // Optimize for large relation sets - limit to reasonable number
-                const maxHighlights = 1000;
-                const legalDescToHighlight = uniqueLegalDescPins.slice(0, maxHighlights);
-                const sharedGranteeToHighlight = uniqueSharedGranteePins.slice(0, maxHighlights);
-                
-                console.log(`PIN ${pin} - Legal Description: ${legalDescRelations.length} total, ${uniqueLegalDescPins.length} in tilemap`);
-                console.log(`PIN ${pin} - Shared Grantee: ${sharedGranteeRelations.length} total, ${uniqueSharedGranteePins.length} in tilemap`);
-                
-                // Update current highlighted pins
-                currentHighlightedPins.legal_description = legalDescToHighlight;
-                currentHighlightedPins.shared_grantee = sharedGranteeToHighlight;
-                
-                // Update UI counts
-                legalDescCount.textContent = `(${legalDescRelations.length})`;
-                sharedGranteeCount.textContent = `(${sharedGranteeRelations.length})`;
-                
-                // Apply highlights based on checkbox states
-                updateHighlights();
-                
-                // Calculate bounding box for zoom-to-fit (include all relation types)
-                const allParcels = [...legalDescParcels, ...sharedGranteeParcels];
-                
-                if (allParcels.length > 0) {
-                    const bounds = new maplibregl.LngLatBounds();
-                    allParcels.forEach(parcel => {
-                        if (parcel.geometry && parcel.geometry.type === 'Polygon') {
-                            // Add all coordinates of the polygon to the bounds
-                            parcel.geometry.coordinates[0].forEach((coord: number[]) => {
-                                bounds.extend(coord);
-                            });
-                        } else if (parcel.geometry && parcel.geometry.type === 'MultiPolygon') {
-                            // Handle MultiPolygon geometries
-                            parcel.geometry.coordinates.forEach((polygon: number[][][]) => {
-                                polygon[0].forEach((coord: number[]) => {
-                                    bounds.extend(coord);
-                                });
-                            });
-                        }
-                    });
-                    
-                    // Zoom to fit all highlighted parcels with some padding
-                    if (!bounds.isEmpty()) {
-                        map.fitBounds(bounds, {
-                            padding: { top: 50, bottom: 50, left: 50, right: 50 },
-                            maxZoom: 16 // Don't zoom in too close
-                        });
-                        console.log('Zoomed to fit highlighted parcels');
-                    }
-                    
-                    // Update UI with success info
-                    const totalRelations = legalDescRelations.length + sharedGranteeRelations.length;
-                    const totalVisible = uniqueLegalDescPins.length + uniqueSharedGranteePins.length;
-                    relationCountElement.textContent = `Found ${totalRelations} total related parcels, ${totalVisible} visible on map`;
-                } else {
-                    console.log('No related parcels found in tilemap to highlight');
-                    
-                    // Update UI for no relations case
-                    const totalRelations = legalDescRelations.length + sharedGranteeRelations.length;
-                    if (totalRelations > 0) {
-                        relationCountElement.textContent = `Found ${totalRelations} related parcels, but none are visible on the current map`;
-                    } else {
-                        relationCountElement.textContent = 'No related parcels found for this parcel';
-                    }
-                }
-                
-            } catch (error) {
-                console.error("Failed to load PIN relations:", error);
-                // Clear highlights on error
-                map.setFilter('parcels-highlight-legal-description', ['in', 'name', '']);
-                map.setFilter('parcels-highlight-shared-grantee', ['in', 'name', '']);
-                currentHighlightedPins = { legal_description: [], shared_grantee: [] };
-                
-                // Show error in UI
-                errorMessageElement.textContent = `Error loading relations for parcel ${pin}`;
-                errorMessageElement.style.display = 'block';
-                relationCountElement.textContent = '';
-                legalDescCount.textContent = '(0)';
-                sharedGranteeCount.textContent = '(0)';
-            } finally {
-                // Reset loading state
-                loadingIndicatorElement.style.display = 'none';
-                map.getCanvas().style.cursor = '';
-                clickTimeout = null;
-            }
-        }, 150); // 150ms debounce delay
+            // Show error in UI
+            errorMessageElement.textContent = `Error loading documents for parcel ${pin}`;
+            errorMessageElement.style.display = 'block';
+            documentListElement.innerHTML = '';
+        } finally {
+            // Reset loading state
+            loadingIndicatorElement.style.display = 'none';
+            map.getCanvas().style.cursor = '';
+        }
     });
 });
