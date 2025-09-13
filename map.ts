@@ -369,6 +369,8 @@ async function highlightGranteeParcels(granteeName: string, originPin: string) {
       filter: ["in", "name", ...entityData.ASSOCIATED_PINS],
     });
 
+    map.setFeatureState(granteeFeatures, { clicked: false });
+
     if (granteeFeatures.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
       granteeFeatures.forEach((feature) => {
@@ -437,6 +439,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   let hoverPin = null;
+  let clickedParcel = null;
 
   map.on("load", () => {
     console.log("Map loaded, adding PMTiles source...");
@@ -454,7 +457,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       source: "parcels",
       "source-layer": "parcels",
       paint: {
-        "fill-color": "#6CF",
+        "fill-color": [
+          "case",
+          ["boolean", ["feature-state", "clicked"], false],
+          "#FF0",
+          "#6CF",
+        ],
         "fill-opacity": 0.8,
         "fill-outline-color": "#3AD",
       },
@@ -544,8 +552,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (features.length === 0) {
       console.log("No parcel clicked");
+      // Clear individual clicked parcel
+      if (clickedParcel) {
+        map.setFeatureState(
+          { source: "parcels", sourceLayer: "parcels", id: clickedParcel },
+          { clicked: false },
+        );
+      }
       // Clear grantee highlights when clicking empty area
       clearGranteeHighlights();
+
       // Reset UI
       parcelDetailsElement.textContent =
         "Click on a parcel to see property documents";
@@ -554,7 +570,22 @@ document.addEventListener("DOMContentLoaded", async () => {
       return;
     }
 
+    if (clickedParcel) {
+      map.setFeatureState(
+        { source: "parcels", sourceLayer: "parcels", id: clickedParcel },
+        { clicked: false },
+      );
+    }
+
     const parcel = features[0];
+    clickedParcel = features[0].id;
+
+    if (clickedParcel) {
+      map.setFeatureState(
+        { source: "parcels", sourceLayer: "parcels", id: clickedParcel },
+        { clicked: true },
+      );
+    }
 
     // Extract PIN from feature properties
     const pin = parcel.properties?.name;
