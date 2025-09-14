@@ -28,9 +28,9 @@ const pinDocumentsCache = new Map<string, PinDocumentData>();
 const entityDataCache = new Map<string, EntityData>();
 const loadingPins = new Set<string>();
 const loadingEntities = new Set<string>();
-const PIN_API_PATH = "/data/pin/";
-const ENTITY_API_PATH = "/data/entity/";
-const ENTITY_MAPPING_PATH = "/data/entity_files.json";
+const PIN_API_PATH = "https://cdn.deeddish.com/pin/";
+const ENTITY_API_PATH = "https://cdn.deeddish.com/entity/";
+const ENTITY_MAPPING_PATH = "https://cdn.deeddish.com/entity_files.json";
 
 // Entity files mapping (grantee name -> filename)
 let entityFilesMapping: Record<string, string> = {};
@@ -302,10 +302,6 @@ async function renderDocuments(
         "data-grantee",
       );
       if (granteeName) {
-        console.log(
-          `Grantee link clicked: ${granteeName}, checking if function exists:`,
-          typeof highlightGranteeParcels,
-        );
         try {
           await highlightGranteeParcels(granteeName, pin);
         } catch (error) {
@@ -370,7 +366,12 @@ async function highlightGranteeParcels(granteeName: string, originPin: string) {
       filter: ["in", "name", ...entityData.ASSOCIATED_PINS],
     });
 
-    map.setFeatureState(granteeFeatures, { clicked: false });
+    granteeFeatures.forEach((feature) => {
+      map.setFeatureState(
+        { source: "parcels", sourceLayer: "parcels", id: feature.id },
+        { clicked: false },
+      );
+    });
 
     if (granteeFeatures.length > 0) {
       const bounds = new maplibregl.LngLatBounds();
@@ -447,7 +448,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     map.addSource("parcels", {
       type: "vector",
-      url: "pmtiles://https://pub-cc2d6076b2c24c8b890a71ee6903ed40.r2.dev/nbd_parcels.pmtiles",
+      url: "pmtiles://https://cdn.deeddish.com/nbd_parcels.pmtiles",
       promoteId: "name",
     });
 
