@@ -104,6 +104,7 @@ async function loadPinDocuments(pin: string): Promise<PinDocumentData> {
 
   try {
     const response = await fetch(`${PIN_API_PATH}${pin}.json`);
+
     if (!response.ok) {
       if (response.status === 404) {
         // No document file for this PIN
