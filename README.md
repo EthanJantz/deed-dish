@@ -15,6 +15,7 @@ Deed information is collected and stored on a DuckDB database with the following
 | ---------- | ------------------------------------------------------------------------- | ------- |
 | documents  | Contains the metadata for all documents pulled from the Clerk's records.  |         |
 | entities   | Entity-level records identifying unique entity-pin-document combinations. |         |
+
 After ingestion, the data is processed and used to generate two types of files: PIN-level files containing the history of all deeds found associated with the property, and entity-level files containing the list of PINs associated with the named entity[^1]. 
 #### Coverage
 Currently, Deed Dish covers all deeds available from the Cook County Recorder of Deeds for all parcels in the Chicago Community Areas of Logan Square, Avondale, Humboldt Park, and West Town based on the [Chicago CCA Boundary File](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas-Map/cauq-8yn6). Records are available from 1985 to present. Data reflects the state of the documents as of August 2025. 
