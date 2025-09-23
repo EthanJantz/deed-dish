@@ -11,12 +11,12 @@ This project refers to specific property owners (grantees and grantors) as **ent
 #### How Deed Dish Stores Deeds
 Deed information is collected and stored on a DuckDB database with the following tables. 
 
-| Table Name | Table Description                                                         | Columns |
-| ---------- | ------------------------------------------------------------------------- | ------- |
-| documents  | Contains the metadata for all documents pulled from the Clerk's records.  |         |
-| entities   | Entity-level records identifying unique entity-pin-document combinations. |         |
+| Table Name | Table Description                                                         | Columns                                                                                                     |
+| ---------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| documents  | Contains the metadata for all documents pulled from the Clerk's records.  | id, doc_num, pin, date_executed, date_recorded, num_pages, address, doc_type, consideration_amount, pdf_url |
+| entities   | Entity-level records identifying unique entity-pin-document combinations. | id, doc_num, pin, entity_name, entity_status, trust_number                                                  |
 
-After ingestion, the data is processed and used to generate two types of files: PIN-level files containing the history of all deeds found associated with the property, and entity-level files containing the list of PINs associated with the named entity[^1]. 
+After ingestion, the data is processed and used to generate two types of files: PIN-level files containing the history of all deeds found associated with the property, and entity-level files containing the list of PINs associated with the named entity. 
 #### Coverage
 Currently, Deed Dish covers all deeds available from the Cook County Recorder of Deeds for all parcels in the Chicago Community Areas of Logan Square, Avondale, Humboldt Park, and West Town based on the [Chicago CCA Boundary File](https://data.cityofchicago.org/Facilities-Geographic-Boundaries/Boundaries-Community-Areas-Map/cauq-8yn6). Records are available from 1985 to present. Data reflects the state of the documents as of August 2025. 
 ### Parcel Polygon Data
