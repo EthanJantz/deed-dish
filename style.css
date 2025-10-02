@@ -1,0 +1,12 @@
+.nav {
+  font-size: 30px;
+  float: right;
+  display: flex;
+  gap: 8px;
+  flex-direction: row;
+}
+
+i {
+  color: black;
+}
+

@@ -16,7 +16,7 @@
     "pmtiles": "^4.3.0"
   },
   "scripts": {
-    "build": "bun build index.html --outdir ./dist --target browser",
+    "build": "bun build index.html --outdir ./dist --target browser && cp about.html style.css ./dist/",
     "serve": "bun --hot index.ts",
     "dev": "bun run build && bun run serve"
   }
